@@ -142,13 +142,13 @@ function(picowota_build_combined NAME)
 	pico_set_linker_script(picowota ${PICOWOTA_SRC_DIR}/bootloader_shell.ld)
 
 	add_custom_target(${NAME}_hdr DEPENDS ${NAME} picowota)
-	add_custom_command(TARGET ${NAME}_hdr
+	add_custom_command(TARGET ${NAME}_hdr POST_BUILD
 		COMMAND ${PICOWOTA_SRC_DIR}/gen_imghdr.py --map ${PICOWOTA_BIN_DIR}/picowota.elf.map --section .app_bin ${APP_BIN} ${APP_HDR_BIN}
 	)
 
 	add_custom_target(${COMBINED} ALL)
 	add_dependencies(${COMBINED} picowota ${NAME}_hdr)
-	add_custom_command(TARGET ${COMBINED}
+	add_custom_command(TARGET ${COMBINED} POST_BUILD
 		COMMAND ${CMAKE_OBJCOPY}
 			--update-section .app_hdr=${APP_HDR_BIN}
 			--update-section .app_bin=${APP_BIN} ${PICOWOTA_BIN_DIR}/picowota.elf ${COMBINED}.elf
@@ -160,16 +160,10 @@ function(picowota_build_combined NAME)
 		COMMAND ${CMAKE_OBJCOPY} -Obinary ${COMBINED}.elf ${COMBINED}.bin
 	)
 
-	if (NOT ELF2UF2_FOUND)
-		set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PICO_SDK_PATH}/tools)
-		find_package(ELF2UF2)
-	endif()
-	if (ELF2UF2_FOUND)
-		add_custom_command(TARGET ${COMBINED} POST_BUILD
-			COMMAND ELF2UF2 ${COMBINED}.elf ${COMBINED}.uf2
-		)
-		list(APPEND clean_files ${COMBINED}.uf2)
-	endif()
+	add_custom_command(
+        TARGET ${COMBINED} POST_BUILD
+        COMMAND picotool uf2 convert ${COMBINED}.elf ${COMBINED}.uf2 --family rp2350-arm-s
+    )
 
 	set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${clean_files}")
 endfunction()

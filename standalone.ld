@@ -25,9 +25,9 @@
 MEMORY
 {
     FLASH(rx) : ORIGIN = 0x10000000 + 364k, LENGTH = 2048k - 364k
-    RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
-    SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
-    SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
+    RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 512k
+    SCRATCH_X(rwx) : ORIGIN = 0x20080000, LENGTH = 4k
+    SCRATCH_Y(rwx) : ORIGIN = 0x20081000, LENGTH = 4k
 }
 
 ENTRY(_entry_point)
@@ -45,6 +45,8 @@ SECTIONS
         KEEP (*(.vectors))
         KEEP (*(.binary_info_header))
         __binary_info_header_end = .;
+        KEEP (*(.embedded_block))
+        __embedded_block_end = .;
         KEEP (*(.reset))
         /* TODO revisit this now memset/memcpy/float in ROM */
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
@@ -191,7 +193,7 @@ SECTIONS
     {
         __end__ = .;
         end = __end__;
-        *(.heap*)
+        KEEP(*(.heap*))
         __HeapLimit = .;
     } > RAM
 
@@ -206,14 +208,15 @@ SECTIONS
      */
     .stack1_dummy (COPY):
     {
-        *(.stack1*)
+        KEEP(*(.stack1*))
     } > SCRATCH_X
     .stack_dummy (COPY):
     {
-        *(.stack*)
+        KEEP(*(.stack*))
     } > SCRATCH_Y
 
     .flash_end : {
+        KEEP(*(.embedded_end_block*))
         __flash_binary_end = .;
     } > FLASH
 
@@ -228,7 +231,8 @@ SECTIONS
     /* Check if data + heap + stack exceeds RAM limit */
     ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")
 
-    ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
+    ASSERT( __binary_info_header_end - __logical_binary_start <= 1024, "Binary info must be in first 1024 bytes of the binary")
+    ASSERT( __embedded_block_end - __logical_binary_start <= 4096, "Embedded block must be in first 4096 bytes of the binary")
     /* todo assert on extra code */
 }
 

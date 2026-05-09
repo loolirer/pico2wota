@@ -31,9 +31,9 @@ MEMORY
     FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 360k
     FLASH_IMGHDR(rx) : ORIGIN = 0x10000000 + 360k, LENGTH = 4k
     FLASH_APP(rx) : ORIGIN = 0x10000000 + 364k, LENGTH = 2048k - 364k
-    RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
-    SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
-    SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
+    RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 512k
+    SCRATCH_X(rwx) : ORIGIN = 0x20080000, LENGTH = 4k
+    SCRATCH_Y(rwx) : ORIGIN = 0x20081000, LENGTH = 4k
 }
 
 ENTRY(_entry_point)
@@ -49,6 +49,7 @@ SECTIONS
         __flash_binary_start = .;
     } > FLASH
 
+    /*
     .boot2 : {
         __boot2_start__ = .;
         KEEP (*(.boot2))
@@ -57,6 +58,7 @@ SECTIONS
 
     ASSERT(__boot2_end__ - __boot2_start__ == 256,
         "ERROR: Pico second stage bootloader must be 256 bytes in size")
+    */
 
     /*
      * Name a section for the image header and app binary
@@ -88,6 +90,8 @@ SECTIONS
         KEEP (*(.vectors))
         KEEP (*(.binary_info_header))
         __binary_info_header_end = .;
+        KEEP (*(.embedded_block))
+        __embedded_block_end = .;
         KEEP (*(.reset))
         /* TODO revisit this now memset/memcpy/float in ROM */
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
@@ -257,6 +261,7 @@ SECTIONS
     } > SCRATCH_Y
 
     .flash_end : {
+        KEEP(*(.embedded_end_block*))
         __flash_binary_end = .;
     } > FLASH
 
@@ -271,6 +276,7 @@ SECTIONS
     /* Check if data + heap + stack exceeds RAM limit */
     ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")
 
-    ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
+    ASSERT( __binary_info_header_end - __logical_binary_start <= 1024, "Binary info must be in first 1024 bytes of the binary")
+    ASSERT( __embedded_block_end - __logical_binary_start <= 4096, "Embedded block must be in first 4096 bytes of the binary")
     /* todo assert on extra code */
 }

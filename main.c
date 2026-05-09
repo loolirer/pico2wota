@@ -10,7 +10,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "RP2040.h"
+#include "hardware/structs/scb.h"
+#include "hardware/structs/systick.h"
+#if defined(PICO_RP2350)
+#include "hardware/structs/powman.h"
+#endif
 #include "pico/critical_section.h"
 #include "pico/time.h"
 #include "pico/util/queue.h"
@@ -441,12 +445,18 @@ struct comm_command seal_cmd = {
 	.handle = &handle_seal,
 };
 
-static void disable_interrupts(void)
+static void picowota_disable_interrupts(void)
 {
-	SysTick->CTRL &= ~1;
+    systick_hw->csr &= ~1;
 
-	NVIC->ICER[0] = 0xFFFFFFFF;
-	NVIC->ICPR[0] = 0xFFFFFFFF;
+    // Clear Interrupt Enable and Pending registers
+    *((volatile uint32_t*)(PPB_BASE + 0xE180)) = 0xFFFFFFFF; // ICER0
+    *((volatile uint32_t*)(PPB_BASE + 0xE280)) = 0xFFFFFFFF; // ICPR0
+
+#if defined(PICO_RP2350)
+    *((volatile uint32_t*)(PPB_BASE + 0xE184)) = 0xFFFFFFFF; // ICER1
+    *((volatile uint32_t*)(PPB_BASE + 0xE284)) = 0xFFFFFFFF; // ICPR1
+#endif
 }
 
 static void reset_peripherals(void)
@@ -461,17 +471,13 @@ static void reset_peripherals(void)
 
 static void jump_to_vtor(uint32_t vtor)
 {
-	// Derived from the Leaf Labs Cortex-M3 bootloader.
-	// Copyright (c) 2010 LeafLabs LLC.
-	// Modified 2021 Brian Starkey <stark3y@gmail.com>
-	// Originally under The MIT License
-	uint32_t reset_vector = *(volatile uint32_t *)(vtor + 0x04);
+    uint32_t reset_vector = *(volatile uint32_t *)(vtor + 0x04);
 
-	SCB->VTOR = (volatile uint32_t)(vtor);
+    scb_hw->vtor = (volatile uint32_t)(vtor);
 
-	asm volatile("msr msp, %0"::"g"
-			(*(volatile uint32_t *)vtor));
-	asm volatile("bx %0"::"r" (reset_vector));
+    asm volatile("msr msp, %0"::"g"
+            (*(volatile uint32_t *)vtor));
+    asm volatile("bx %0"::"r" (reset_vector));
 }
 
 
@@ -558,10 +564,15 @@ struct comm_command reboot_cmd = {
 
 static bool should_stay_in_bootloader()
 {
-	bool wd_says_so = (watchdog_hw->scratch[5] == PICOWOTA_BOOTLOADER_ENTRY_MAGIC) &&
-		(watchdog_hw->scratch[6] == ~PICOWOTA_BOOTLOADER_ENTRY_MAGIC);
+#if defined(PICO_RP2350)
+    bool wd_says_so = (powman_hw->scratch[5] == PICOWOTA_BOOTLOADER_ENTRY_MAGIC) &&
+        (powman_hw->scratch[6] == ~PICOWOTA_BOOTLOADER_ENTRY_MAGIC);
+#else
+    bool wd_says_so = (watchdog_hw->scratch[5] == PICOWOTA_BOOTLOADER_ENTRY_MAGIC) &&
+        (watchdog_hw->scratch[6] == ~PICOWOTA_BOOTLOADER_ENTRY_MAGIC);
+#endif
 
-	return !gpio_get(BOOTLOADER_ENTRY_PIN) || wd_says_so;
+    return !gpio_get(BOOTLOADER_ENTRY_PIN) || wd_says_so;
 }
 
 static void network_deinit()
@@ -584,7 +595,7 @@ int main()
 
 	if (!should_stay_in_bootloader() && image_header_ok(&app_image_header)) {
 		uint32_t vtor = *(uint32_t *)IMAGE_HEADER_ADDR;
-		disable_interrupts();
+		picowota_disable_interrupts();
 		reset_peripherals();
 		jump_to_vtor(vtor);
 	}
@@ -662,7 +673,7 @@ int main()
 			case EVENT_TYPE_GO:
 				tcp_comm_server_close(tcp);
 				network_deinit();
-				disable_interrupts();
+				picowota_disable_interrupts();
 				reset_peripherals();
 				jump_to_vtor(ev.go.vtor);
 				/* Should never get here */
