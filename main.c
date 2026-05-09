@@ -32,7 +32,7 @@
 
 #include "tcp_comm.h"
 
-#include "picowota/reboot.h"
+#include "pico2wota/reboot.h"
 
 #ifdef DEBUG
 #include <stdio.h>
@@ -44,7 +44,7 @@
 #define DBG_PRINTF(...) { }
 #endif
 
-#if PICOWOTA_WIFI_AP == 1
+#if PICO2WOTA_WIFI_AP == 1
 #include "dhcpserver.h"
 static dhcp_server_t dhcp_server;
 #endif
@@ -52,16 +52,16 @@ static dhcp_server_t dhcp_server;
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
 
-#ifndef PICOWOTA_WIFI_SSID
-#warning "PICOWOTA_WIFI_SSID not defined"
+#ifndef PICO2WOTA_WIFI_SSID
+#warning "PICO2WOTA_WIFI_SSID not defined"
 #else
-const char *wifi_ssid = STR(PICOWOTA_WIFI_SSID);
+const char *wifi_ssid = STR(PICO2WOTA_WIFI_SSID);
 #endif
 
-#ifndef PICOWOTA_WIFI_PASS
-#warning "PICOWOTA_WIFI_PASS not defined"
+#ifndef PICO2WOTA_WIFI_PASS
+#warning "PICO2WOTA_WIFI_PASS not defined"
 #else
-const char *wifi_pass = STR(PICOWOTA_WIFI_PASS);
+const char *wifi_pass = STR(PICO2WOTA_WIFI_PASS);
 #endif
 
 critical_section_t critical_section;
@@ -445,7 +445,7 @@ struct comm_command seal_cmd = {
 	.handle = &handle_seal,
 };
 
-static void picowota_disable_interrupts(void)
+static void pico2wota_disable_interrupts(void)
 {
     systick_hw->csr &= ~1;
 
@@ -565,11 +565,11 @@ struct comm_command reboot_cmd = {
 static bool should_stay_in_bootloader()
 {
 #if defined(PICO_RP2350)
-    bool wd_says_so = (powman_hw->scratch[5] == PICOWOTA_BOOTLOADER_ENTRY_MAGIC) &&
-        (powman_hw->scratch[6] == ~PICOWOTA_BOOTLOADER_ENTRY_MAGIC);
+    bool wd_says_so = (powman_hw->scratch[5] == PICO2WOTA_BOOTLOADER_ENTRY_MAGIC) &&
+        (powman_hw->scratch[6] == ~PICO2WOTA_BOOTLOADER_ENTRY_MAGIC);
 #else
-    bool wd_says_so = (watchdog_hw->scratch[5] == PICOWOTA_BOOTLOADER_ENTRY_MAGIC) &&
-        (watchdog_hw->scratch[6] == ~PICOWOTA_BOOTLOADER_ENTRY_MAGIC);
+    bool wd_says_so = (watchdog_hw->scratch[5] == PICO2WOTA_BOOTLOADER_ENTRY_MAGIC) &&
+        (watchdog_hw->scratch[6] == ~PICO2WOTA_BOOTLOADER_ENTRY_MAGIC);
 #endif
 
     return !gpio_get(BOOTLOADER_ENTRY_PIN) || wd_says_so;
@@ -577,7 +577,7 @@ static bool should_stay_in_bootloader()
 
 static void network_deinit()
 {
-#if PICOWOTA_WIFI_AP == 1
+#if PICO2WOTA_WIFI_AP == 1
 	dhcp_server_deinit(&dhcp_server);
 #endif
 	cyw43_arch_deinit();
@@ -595,7 +595,7 @@ int main()
 
 	if (!should_stay_in_bootloader() && image_header_ok(&app_image_header)) {
 		uint32_t vtor = *(uint32_t *)IMAGE_HEADER_ADDR;
-		picowota_disable_interrupts();
+		pico2wota_disable_interrupts();
 		reset_peripherals();
 		jump_to_vtor(vtor);
 	}
@@ -609,7 +609,7 @@ int main()
 		return 1;
 	}
 
-#if PICOWOTA_WIFI_AP == 1
+#if PICO2WOTA_WIFI_AP == 1
 	cyw43_arch_enable_ap_mode(wifi_ssid, wifi_pass, CYW43_AUTH_WPA2_AES_PSK);
 	DBG_PRINTF("Enabled the WiFi AP.\n");
 
@@ -667,13 +667,13 @@ int main()
 			case EVENT_TYPE_REBOOT:
 				tcp_comm_server_close(tcp);
 				network_deinit();
-				picowota_reboot(ev.reboot.to_bootloader);
+				pico2wota_reboot(ev.reboot.to_bootloader);
 				/* Should never get here */
 				break;
 			case EVENT_TYPE_GO:
 				tcp_comm_server_close(tcp);
 				network_deinit();
-				picowota_disable_interrupts();
+				pico2wota_disable_interrupts();
 				reset_peripherals();
 				jump_to_vtor(ev.go.vtor);
 				/* Should never get here */
